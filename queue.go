@@ -42,8 +42,8 @@ func createQueues(events []string) error {
 			}
 
 			if exists {
-				log.Printf("Queue %s already exists, skipping creation", queueName)
-				fmt.Printf("Queue %s already exists, skipping\n", queueName)
+				log.Printf("Queue %s already exists, skipping creation...", queueName)
+				fmt.Printf("Queue %s already exists, skipping...\n", queueName)
 				continue
 			}
 
@@ -84,10 +84,7 @@ func queueExists(ch *amqp.Channel, queueName string) (bool, error) {
 		if strings.Contains(err.Error(), "NOT_FOUND") {
 			return false, nil
 		}
-		// Other error occurred
 		return false, err
 	}
-
-	// Queue exists
 	return true, nil
 }
