@@ -1,106 +1,15 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"log"
-	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"github.com/streadway/amqp"
 )
 
-type Config struct {
-	RabbitMQ struct {
-		URL string `toml:"url"`
-	} `toml:"rabbitmq"`
-	CLI struct {
-		LogLevel string `toml:"log_level"`
-	} `toml:"cli"`
-}
-
-var cfg Config
-
 func init() {
-	viper.SetConfigName("config")
-	viper.SetConfigType("toml")
-	viper.AddConfigPath(".")
-
-	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalf("Error reading config file: %v", err)
-	}
-
-	if err := viper.Unmarshal(&cfg); err != nil {
-		log.Fatalf("Error unmarshaling config: %v", err)
-	}
-}
-
-func createQueues(events []string) error {
-	conn, err := amqp.Dial(cfg.RabbitMQ.URL)
-	if err != nil {
-		return fmt.Errorf("failed to connect to RabbitMQ: %v", err)
-	}
-	defer conn.Close()
-
-	ch, err := conn.Channel()
-	if err != nil {
-		return fmt.Errorf("failed to open a channel: %v", err)
-	}
-	defer ch.Close()
-
-	for _, event := range events {
-		if strings.TrimSpace(event) == "" {
-			continue
-		}
-
-		queues := []string{
-			fmt.Sprintf("cert_%s", event),
-			fmt.Sprintf("dispatch_%s", event),
-		}
-
-		for _, queueName := range queues {
-			_, err := ch.QueueDeclare(
-				queueName, // name
-				true,      // durable
-				false,     // delete when unused
-				false,     // exclusive
-				false,     // no-wait
-				nil,       // arguments
-			)
-			if err != nil {
-				log.Printf("Failed to declare queue %s: %v", queueName, err)
-				continue
-			}
-			fmt.Printf("Created queue: %s\n", queueName)
-		}
-	}
-
-	return nil
-}
-
-func readEventsFile(filename string) ([]string, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open file %s: %v", filename, err)
-	}
-	defer file.Close()
-
-	var events []string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line != "" {
-			events = append(events, line)
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading file %s: %v", filename, err)
-	}
-
-	return events, nil
+	LoadConfig()
+	setupLogger()
 }
 
 var createCmd = &cobra.Command{
@@ -126,9 +35,42 @@ var createCmd = &cobra.Command{
 	},
 }
 
+var processCmd = &cobra.Command{
+	Use:   "process [csv-file]",
+	Short: "Process CSV file and add student data to certificate queue",
+	Long:  `Read student data from CSV file and publish to cert_ queue as JSON payloads`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		csvFile := args[0]
+
+		students, err := parseCSVFile(csvFile)
+		if err != nil {
+			log.Fatalf("Error parsing CSV file: %v", err)
+		}
+
+		if len(students) == 0 {
+			fmt.Println("No valid student records found")
+			return
+		}
+
+		eventName := extractEventName(csvFile)
+		queueName := fmt.Sprintf("cert_%s", eventName)
+
+		fmt.Printf("Processing %d students for event: %s\n", len(students), eventName)
+		fmt.Printf("Publishing to queue: %s\n", queueName)
+
+		if err := publishToQueue(queueName, students); err != nil {
+			log.Fatalf("Error publishing to queue: %v", err)
+		}
+
+		fmt.Println("CSV processing completed successfully")
+	},
+}
+
 func main() {
 	var rootCmd = &cobra.Command{Use: "sigil"}
 	rootCmd.AddCommand(createCmd)
+	rootCmd.AddCommand(processCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
