@@ -1,10 +1,15 @@
 # Certificate Dispatch System
 
-A Go-based system for processing CSV data and sending personalized certificates via email using RabbitMQ for queue management and concurrent processing.
+A Go-based system for processing CSV data and sending personalized 
+certificates via email using RabbitMQ for queue management and 
+concurrent processing.
 
 ## Overview
 
-This system reads student data from CSV files, validates eligibility, creates event-specific RabbitMQ queues, and processes certificates through a concurrent workflow. Each event gets dedicated `cert_` and `dispatch_` queues for certificate processing and email delivery.
+This system reads student data from CSV files, validates eligibility, 
+creates event-specific RabbitMQ queues, and processes certificates through 
+a concurrent workflow. Each event gets dedicated `cert_` and `dispatch_` 
+queues for certificate processing and email delivery.
 
 ## Setup
 
