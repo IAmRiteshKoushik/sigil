@@ -1,4 +1,4 @@
-# Certificate Dispatch System
+# SIGIL: A Certificate Dispatch System
 
 A Go-based system for processing CSV data and sending personalized 
 certificates via email using RabbitMQ for queue management and 
